@@ -347,7 +347,7 @@ class ST_GAT_EdgeType(torch.nn.Module):
     
 config = {
     'BATCH_SIZE': 50,
-    'EPOCHS': 1,
+    'EPOCHS': 60,
     'WEIGHT_DECAY': 5e-5,
     'INITIAL_LR': 3e-4,
     'CHECKPOINT_DIR': './runs',
