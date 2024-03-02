@@ -1,7 +1,7 @@
-#    Graph 1 Single Edge (Baseline)   #
+#         Graph 5 Single Edge         #
 # ------------------------------------#
-# Node Features: Speeds from Past Hour
-# Edges Included: Type 1
+# Node Features: Speeds from Past Hour, Number of Lanes, Day of Week, Hour of Day
+# Edges Included: Type 1, Type 2
 # Edge Types: Not Learned
 
 import torch
@@ -178,10 +178,56 @@ def distance_to_W1(dist_df, conn_df):
     
     return W1
 
-class Graph1(InMemoryDataset):
-    def __init__(self, config, W1, root='', transform=None, pre_transform=None):
+def distance_to_W2(dist_df, non_conn_df, dist_thresh, edge_num_thresh):
+    # Inverse transform distances
+    dist_array = dist_df.values
+    dist_array = np.where(dist_array == 0, np.nan, dist_array)
+    dist_array_inv = 1 / dist_array
+    dist_array_inv = pd.DataFrame(dist_array_inv).fillna(0).values
+    
+    non_conn_array = non_conn_df.values
+    W2 = dist_array_inv * non_conn_array
+    
+    dist_mask = W2 >= 1 / dist_thresh
+    W2 = W2 * dist_mask
+
+    edge_num_mask = []
+    for row in W2:
+        sorted_row = sorted(row)
+        while sorted_row[-edge_num_thresh] == 0:
+            edge_num_thresh -= 1
+            if edge_num_thresh == 0:
+                break
+
+        thresh = sorted_row[-edge_num_thresh]
+        edge_num_mask.append(row >= thresh)
+
+    edge_num_mask = np.array(edge_num_mask)
+    W2 = W2 * edge_num_mask
+    
+    W2_copy = W2.copy()
+    for row_ind, row in enumerate(W2):
+        for col_ind, val in enumerate(row):
+            if val != 0:
+                W2_copy[col_ind, row_ind] = val
+
+    return W2_copy
+
+def convert_hour_to_sin_cos(hour):
+    # Normalize the hour to a value between 0 and 2pi
+    normalized_hour = (hour / 24.0) * 2 * np.pi
+    
+    # Calculate sine and cosine values
+    sin_val = np.sin(normalized_hour)
+    cos_val = np.cos(normalized_hour)
+    
+    return sin_val, cos_val
+
+# Creating the graph
+class Graph5(InMemoryDataset):
+    def __init__(self, config, W1, W2, root='', transform=None, pre_transform=None):
         self.config = config
-        self.W = W1
+        self.W = W1 + W2
         super().__init__(root, transform, pre_transform)
         self.process()
     
@@ -234,7 +280,35 @@ class Graph1(InMemoryDataset):
                 # Find full window of speeds for each sensor
                 full_window = np.swapaxes(data[sta:end, :], 0, 1)
                 
-                g.x = torch.FloatTensor(full_window[:, 0:self.config['N_HIST']])
+                # Find number of lanes for each sensor
+                num_lanes = vds_info['Lanes'].values
+                lanes_tens = torch.tensor(num_lanes.reshape(-1, 1), dtype=torch.float32)
+                lanes_mean = lanes_tens.mean()
+                lanes_std = lanes_tens.std()
+                lanes_tens = z_score(lanes_tens, lanes_mean, lanes_std)
+                
+                # Find day of week and one hot encode for each sensor
+                date_window = sensor_speed.T.index[sta:end]
+                curr_date = date_window[config['N_HIST'] - 1]
+                date_obj = datetime.strptime(curr_date, '%m/%d/%Y %H:%M')
+                day_of_week = date_obj.weekday()
+                day_one_hot = [0] * 7
+                day_one_hot[day_of_week] = 1
+                day_one_hot_tensor = torch.FloatTensor(day_one_hot).unsqueeze(0)
+                repeated_day = day_one_hot_tensor.repeat(n_node, 1)
+                
+                # Find hour of day for each sensor
+                hour_of_day = date_obj.hour
+                new_hour = convert_hour_to_sin_cos(hour_of_day)
+                hour_tensor = torch.FloatTensor(new_hour).unsqueeze(0)
+                repeated_hour = hour_tensor.repeat(n_node, 1)
+                
+                g.x = torch.cat([
+                    torch.FloatTensor(full_window[:, 0:self.config['N_HIST']]),
+                    lanes_tens,
+                    repeated_day,
+                    repeated_hour
+                ], dim=1)
                 g.y = torch.FloatTensor(full_window[:, self.config['N_HIST']::])
                 sequences.append(g)
         
@@ -254,7 +328,7 @@ class ST_GAT_SingleEdge(torch.nn.Module):
         self.heads = heads
         self.dropout = dropout
         self.n_nodes = n_nodes
-        self.gat_in_dim = in_channels
+        self.gat_in_dim = in_channels + 10
         self.gat_out_dim = in_channels
         
         lstm1_hidden_size = 32
@@ -299,7 +373,7 @@ class ST_GAT_SingleEdge(torch.nn.Module):
         # [batch_size*n_nodes, seq_length] -> [batch_size, n_nodes, num_hist]
         batch_size = data.num_graphs
         n_node = int(data.num_nodes/batch_size)
-        x = torch.reshape(x, (batch_size, n_node, data.num_features))
+        x = torch.reshape(x, (batch_size, n_node, data.num_features - 10))
         # for lstm: x should be (num_hist, batch_size, n_nodes)
         # num_hist = 2, batch_size = 50, n_node = 71
         x = torch.movedim(x, 2, 0)
@@ -320,9 +394,9 @@ class ST_GAT_SingleEdge(torch.nn.Module):
         x = torch.reshape(x, (s[0], self.n_nodes, self.n_pred))
         # [50, 71, 2] ->  [3550, 2]
         x = torch.reshape(x, (s[0]*self.n_nodes, self.n_pred))
-    
+        
         return x
-
+    
 config = {
     'BATCH_SIZE': 50,
     'EPOCHS': 1,
@@ -335,7 +409,9 @@ config = {
     'N_DAY_SLOT': 288,
     # number of days worth of data in the dataset
     'N_DAYS': 14,
-    'N_NODE': 71
+    'N_NODE': 71,
+    'W2_N_EDGE_THRESH': 3,
+    'W2_DIST_THRESH': 2
 }
 
 ####### Predict the Next 15 Mins ######
@@ -347,7 +423,8 @@ config['N_SLOT']= config['N_DAY_SLOT'] - (config['N_PRED']+config['N_HIST']) + 1
 
 # Create Dataset
 W1 = distance_to_W1(sensor_dist, sensor_conn)
-dataset = Graph1(config, W1)
+W2 = distance_to_W2(sensor_dist, non_conn, config['W2_DIST_THRESH'], config['W2_N_EDGE_THRESH'])
+dataset = Graph5(config, W1, W2)
 
 # Create train, val, test splits
 splits = (7, 3, 4) # 14 days in dataset -> train=7 val=3 test=4
@@ -392,7 +469,7 @@ def plot_prediction(test_dataloader, y_pred, y_truth, node, config):
     plt.ylabel('Speed prediction (mph)')
     plt.title('Predictions of traffic over one day at one sensor')
     plt.legend()
-    plt.savefig('../results/Graph1_SingleEdge/Graph1_SingleEdge_15.png')
+    plt.savefig('../results/Graph5_SingleEdge/Graph5_SingleEdge_15.png')
     plt.clf()
 
 # Evaluate model on test set
@@ -408,7 +485,8 @@ config['N_SLOT']= config['N_DAY_SLOT'] - (config['N_PRED']+config['N_HIST']) + 1
 
 # Create Dataset
 W1 = distance_to_W1(sensor_dist, sensor_conn)
-dataset = Graph1(config, W1)
+W2 = distance_to_W2(sensor_dist, non_conn, config['W2_DIST_THRESH'], config['W2_N_EDGE_THRESH'])
+dataset = Graph5(config, W1, W2)
 
 # Create train, val, test splits
 splits = (7, 3, 4) # 14 days in dataset -> train=7 val=3 test=4
@@ -453,7 +531,7 @@ def plot_prediction(test_dataloader, y_pred, y_truth, node, config):
     plt.ylabel('Speed prediction (mph)')
     plt.title('Predictions of traffic over one day at one sensor')
     plt.legend()
-    plt.savefig('../results/Graph1_SingleEdge/Graph1_SingleEdge_30.png')
+    plt.savefig('../results/Graph5_SingleEdge/Graph5_SingleEdge_30.png')
     plt.clf()
 
 # Evaluate model on test set
@@ -469,7 +547,8 @@ config['N_SLOT']= config['N_DAY_SLOT'] - (config['N_PRED']+config['N_HIST']) + 1
 
 # Create Dataset
 W1 = distance_to_W1(sensor_dist, sensor_conn)
-dataset = Graph1(config, W1)
+W2 = distance_to_W2(sensor_dist, non_conn, config['W2_DIST_THRESH'], config['W2_N_EDGE_THRESH'])
+dataset = Graph5(config, W1, W2)
 
 # Create train, val, test splits
 splits = (7, 3, 4) # 14 days in dataset -> train=7 val=3 test=4
@@ -514,7 +593,7 @@ def plot_prediction(test_dataloader, y_pred, y_truth, node, config):
     plt.ylabel('Speed prediction (mph)')
     plt.title('Predictions of traffic over one day at one sensor')
     plt.legend()
-    plt.savefig('../results/Graph1_SingleEdge/Graph1_SingleEdge_45.png')
+    plt.savefig('../results/Graph5_SingleEdge/Graph5_SingleEdge_45.png')
     plt.clf()
 
 # Evaluate model on test set
@@ -522,10 +601,10 @@ rmse45, mae45, mape45, y_pred, y_truth = eval(model, device, test_dataloader, 'T
 plot_prediction(test_dataloader, y_pred, y_truth, 0, config)
 
 print('-------------------------------------------------------------------------------')
-print('\nGraph 1 Single Edge (Baseline)')
-print('------------------------------')
-print('Node Features: Speeds from Past Hour')
-print('Edges Included: Type 1')
+print('\nGraph 5 Single Edge')
+print('-------------------')
+print('Node Features: Speeds from Past Hour, Number of Lanes, Day of Week, Hour of Day')
+print('Edges Included: Type 1, Type 2')
 print('Edge Types: Not Learned\n')
 print(f'Test Evals for 15 mins: RMSE: {rmse15}, MAE: {mae15}, MAPE: {mape15}')
 print(f'Test Evals for 30 mins: RMSE: {rmse30}, MAE: {mae30}, MAPE: {mape30}')

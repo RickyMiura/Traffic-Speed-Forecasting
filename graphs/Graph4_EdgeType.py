@@ -1,8 +1,8 @@
-#    Graph 1 Single Edge (Baseline)   #
+#          Graph 4 Edge Type          #
 # ------------------------------------#
-# Node Features: Speeds from Past Hour
+# Node Features: Speeds from Past Hour, Number of Lanes, Day of Week, Hour of Day
 # Edges Included: Type 1
-# Edge Types: Not Learned
+# Edge Types: Learned
 
 import torch
 import numpy as np
@@ -16,8 +16,9 @@ import os
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
-from torch_geometric.nn import GATv2Conv
+from torch_geometric.nn import GATv2Conv, HeteroConv
 from datetime import datetime
+from torch_geometric.data import HeteroData
 
 ###### Load in datasets ######
 
@@ -67,12 +68,12 @@ def eval(model, device, dataloader, type=''):
     # Evaluate model on all data
     for i, batch in enumerate(dataloader):
         batch = batch.to(device)
-        if batch.x.shape[0] == 1:
+        if batch.x_dict['sensor'].shape[0] == 1:
             pass
         else:
             with torch.no_grad():
                 pred = model(batch, device)
-            truth = batch.y.view(pred.shape)
+            truth = batch.y_dict['sensor'].view(pred.shape)
             if i == 0:
                 y_pred = torch.zeros(len(dataloader), pred.shape[0], pred.shape[1])
                 y_truth = torch.zeros(len(dataloader), pred.shape[0], pred.shape[1])
@@ -97,7 +98,7 @@ def train(model, device, dataloader, optimizer, loss_fn, epoch):
         batch = batch.to(device)
         optimizer.zero_grad()
         y_pred = torch.squeeze(model(batch, device))
-        loss = loss_fn()(y_pred.float(), torch.squeeze(batch.y).float())
+        loss = loss_fn()(y_pred.float(), torch.squeeze(batch.y_dict['sensor']).float())
         writer.add_scalar("Loss/train", loss, epoch)
         loss.backward()
         optimizer.step()
@@ -108,7 +109,7 @@ def train(model, device, dataloader, optimizer, loss_fn, epoch):
 writer = SummaryWriter()
 
 def model_train(train_dataloader, val_dataloader, config, device):
-    model = ST_GAT_SingleEdge(in_channels=config['N_HIST'], out_channels=config['N_PRED'], n_nodes=config['N_NODE'], dropout=config['DROPOUT'])
+    model = ST_GAT_EdgeType(in_channels=config['N_HIST'], out_channels=config['N_PRED'], n_nodes=config['N_NODE'], dropout=config['DROPOUT'])
     optimizer = optim.Adam(model.parameters(), lr=config['INITIAL_LR'], weight_decay=config['WEIGHT_DECAY'])
     loss_fn = torch.nn.MSELoss
 
@@ -178,10 +179,21 @@ def distance_to_W1(dist_df, conn_df):
     
     return W1
 
-class Graph1(InMemoryDataset):
+def convert_hour_to_sin_cos(hour):
+    # Normalize the hour to a value between 0 and 2pi
+    normalized_hour = (hour / 24.0) * 2 * np.pi
+    
+    # Calculate sine and cosine values
+    sin_val = np.sin(normalized_hour)
+    cos_val = np.cos(normalized_hour)
+    
+    return sin_val, cos_val
+
+# Creating the graph
+class Graph4(InMemoryDataset):
     def __init__(self, config, W1, root='', transform=None, pre_transform=None):
         self.config = config
-        self.W = W1
+        self.W1 = W1
         super().__init__(root, transform, pre_transform)
         self.process()
     
@@ -194,26 +206,26 @@ class Graph1(InMemoryDataset):
         n_node = data.shape[1]
         n_window = self.config['N_PRED'] + self.config['N_HIST']
         
-        edge_index = torch.zeros((2, n_node**2), dtype=torch.long)
-        edge_attr = torch.zeros((n_node**2, 1))
-        num_edges = 0
+        W1_edge_index = torch.zeros((2, n_node**2), dtype=torch.long)
+        W1_edge_attr = torch.zeros((n_node**2, 1))
+        W1_num_edges = 0
         for i in range(n_node):
             for j in range(n_node):
-                if self.W[i, j] != 0:
-                    edge_index[0, num_edges] = i
-                    edge_index[1, num_edges] = j
-                    edge_attr[num_edges] = self.W[i, j]
-                    num_edges += 1
+                if self.W1[i, j] != 0:
+                    W1_edge_index[0, W1_num_edges] = i
+                    W1_edge_index[1, W1_num_edges] = j
+                    W1_edge_attr[W1_num_edges] = self.W1[i, j]
+                    W1_num_edges += 1
         
         # Resize to keep first num_edges entries
-        edge_ind_aslst = edge_index.tolist()
-        for i in range(len(edge_ind_aslst[0])):
-            if (edge_ind_aslst[0][i] == 0) and (edge_ind_aslst[1][i] == 0):
-                first = edge_ind_aslst[0][:i]
-                second = edge_ind_aslst[1][:i]
-                edge_index = torch.tensor([first, second], dtype=torch.long)
+        W1_edge_ind_aslst = W1_edge_index.tolist()
+        for i in range(len(W1_edge_ind_aslst[0])):
+            if (W1_edge_ind_aslst[0][i] == 0) and (W1_edge_ind_aslst[1][i] == 0):
+                first = W1_edge_ind_aslst[0][:i]
+                second = W1_edge_ind_aslst[1][:i]
+                W1_edge_index = torch.tensor([first, second], dtype=torch.long)
                 break
-        edge_attr = edge_attr.resize_(num_edges, 1)
+        W1_edge_attr = W1_edge_attr.resize_(W1_num_edges, 1)
         
         sequences = []
         # T x F x N
@@ -221,11 +233,10 @@ class Graph1(InMemoryDataset):
             for j in range(self.config['N_SLOT']):
                 # for each time point construct a different graph with data object
                 
-                g = Data()
-                g.__num_nodes__ = n_node
+                g = HeteroData()
 
-                g.edge_index = edge_index
-                g.edge_attr  = edge_attr
+                g['sensor', 'type1', 'sensor'].edge_index = W1_edge_index
+                g['sensor', 'type1', 'sensor'].edge_attr = W1_edge_attr
 
                 # (F,N) switched to (N,F)
                 sta = i * self.config['N_DAY_SLOT'] + j
@@ -234,8 +245,36 @@ class Graph1(InMemoryDataset):
                 # Find full window of speeds for each sensor
                 full_window = np.swapaxes(data[sta:end, :], 0, 1)
                 
-                g.x = torch.FloatTensor(full_window[:, 0:self.config['N_HIST']])
-                g.y = torch.FloatTensor(full_window[:, self.config['N_HIST']::])
+                # Find number of lanes for each sensor
+                num_lanes = vds_info['Lanes'].values
+                lanes_tens = torch.tensor(num_lanes.reshape(-1, 1), dtype=torch.float32)
+                lanes_mean = lanes_tens.mean()
+                lanes_std = lanes_tens.std()
+                lanes_tens = z_score(lanes_tens, lanes_mean, lanes_std)
+                
+                # Find day of week and one hot encode for each sensor
+                date_window = sensor_speed.T.index[sta:end]
+                curr_date = date_window[config['N_HIST'] - 1]
+                date_obj = datetime.strptime(curr_date, '%m/%d/%Y %H:%M')
+                day_of_week = date_obj.weekday()
+                day_one_hot = [0] * 7
+                day_one_hot[day_of_week] = 1
+                day_one_hot_tensor = torch.FloatTensor(day_one_hot).unsqueeze(0)
+                repeated_day = day_one_hot_tensor.repeat(n_node, 1)
+                
+                # Find hour of day for each sensor
+                hour_of_day = date_obj.hour
+                new_hour = convert_hour_to_sin_cos(hour_of_day)
+                hour_tensor = torch.FloatTensor(new_hour).unsqueeze(0)
+                repeated_hour = hour_tensor.repeat(n_node, 1)
+                
+                g['sensor'].x = torch.cat([
+                    torch.FloatTensor(full_window[:, 0:self.config['N_HIST']]),
+                    lanes_tens,
+                    repeated_day,
+                    repeated_hour
+                ], dim=1)
+                g['sensor'].y = torch.FloatTensor(full_window[:, self.config['N_HIST']::])
                 sequences.append(g)
         
         data, slices = self.collate(sequences)
@@ -247,22 +286,23 @@ class Graph1(InMemoryDataset):
         return []
     
 ###### Construct the Model ######
-class ST_GAT_SingleEdge(torch.nn.Module):
+class ST_GAT_EdgeType(torch.nn.Module):
     def __init__(self, in_channels, out_channels, n_nodes, heads=8, dropout=0.0):
-        super(ST_GAT_SingleEdge, self).__init__()
+        super(ST_GAT_EdgeType, self).__init__()
         self.n_pred = out_channels
         self.heads = heads
         self.dropout = dropout
         self.n_nodes = n_nodes
-        self.gat_in_dim = in_channels
+        self.gat_in_dim = in_channels + 10
         self.gat_out_dim = in_channels
         
         lstm1_hidden_size = 32
         lstm2_hidden_size = 128
         
         # single graph attentional layer with 8 attention heads
-        self.gat = GATv2Conv(in_channels=self.gat_in_dim, out_channels=self.gat_out_dim,
-            heads=heads, dropout=0, concat=False)
+        self.gat = HeteroConv({
+            ('sensor', 'type1', 'sensor'): GATv2Conv(in_channels=self.gat_in_dim, out_channels=self.gat_out_dim, heads=heads, dropout=0, concat=False)
+        }, aggr='sum')
 
         # add two LSTM layers
         self.lstm1 = torch.nn.LSTM(input_size=self.n_nodes, hidden_size=lstm1_hidden_size, num_layers=1)
@@ -283,46 +323,28 @@ class ST_GAT_SingleEdge(torch.nn.Module):
         torch.nn.init.xavier_uniform_(self.linear.weight)
         
     def forward(self, data, device):
-        x, edge_index = data.x, data.edge_index
-        # apply dropout
+        x_dict, edge_index_dict = data.x_dict, data.edge_index_dict
         if device == 'cpu':
-            x = torch.FloatTensor(x)
+            x_dict['sensor'] = torch.FloatTensor(x_dict['sensor'])
         else:
-            x = torch.cuda.FloatTensor(x)
-        
-        # GNN: 1 GAT layer
-        # GAT output: [num_hist, batch_size, num_nodes] = [2, 50, 71]
-        x = self.gat(x, edge_index)
-        x = F.dropout(x, self.dropout, training=self.training)
-        
-        # RNN: 2 LSTM
-        # [batch_size*n_nodes, seq_length] -> [batch_size, n_nodes, num_hist]
-        batch_size = data.num_graphs
-        n_node = int(data.num_nodes/batch_size)
-        x = torch.reshape(x, (batch_size, n_node, data.num_features))
-        # for lstm: x should be (num_hist, batch_size, n_nodes)
-        # num_hist = 2, batch_size = 50, n_node = 71
-        x = torch.movedim(x, 2, 0)
-        # [2, 50, 71] -> [2, 50, 32]
-        x, _ = self.lstm1(x)
-        # [2, 50, 32] -> [2, 50, 128]
-        x, _ = self.lstm2(x)
-        
-        # Output contains h_t for each timestep, only the last one has all input's accounted for
-        # [2, 50, 128] -> [50, 128]
-        x = torch.squeeze(x[-1, :, :])
-        # [50, 128] -> [50, 71*2]
-        x = self.linear(x)
-        
-        # Now reshape into final output
-        s = x.shape
-        # [50, 71*2] -> [50, 71, 2]
-        x = torch.reshape(x, (s[0], self.n_nodes, self.n_pred))
-        # [50, 71, 2] ->  [3550, 2]
-        x = torch.reshape(x, (s[0]*self.n_nodes, self.n_pred))
-    
-        return x
+            x_dict['sensor'] = torch.cuda.FloatTensor(x_dict['sensor'])
+            
+        x_dict = self.gat(x_dict, edge_index_dict)
+        x_dict = {key: x.relu() for key, x in x_dict.items()}
+        x = F.dropout(x_dict['sensor'], self.dropout, training=self.training)
 
+        batch_size = int(x.shape[0] / self.n_nodes)
+        x = torch.reshape(x, (batch_size, self.n_nodes, x.shape[1]))
+        x = torch.movedim(x, 2, 0)
+        x, _ = self.lstm1(x)
+        x, _ = self.lstm2(x)
+        x = torch.squeeze(x[-1, :, :])
+        x = self.linear(x)
+        s = x.shape
+        x = torch.reshape(x, (s[0], self.n_nodes, self.n_pred))
+        x = torch.reshape(x, (s[0]*self.n_nodes, self.n_pred))
+        return x
+    
 config = {
     'BATCH_SIZE': 50,
     'EPOCHS': 1,
@@ -347,7 +369,7 @@ config['N_SLOT']= config['N_DAY_SLOT'] - (config['N_PRED']+config['N_HIST']) + 1
 
 # Create Dataset
 W1 = distance_to_W1(sensor_dist, sensor_conn)
-dataset = Graph1(config, W1)
+dataset = Graph4(config, W1)
 
 # Create train, val, test splits
 splits = (7, 3, 4) # 14 days in dataset -> train=7 val=3 test=4
@@ -386,13 +408,13 @@ def plot_prediction(test_dataloader, y_pred, y_truth, node, config):
     # Just grab the second day
     day1_pred = y_pred[config['N_SLOT']:2*config['N_SLOT']]
     t = [t for t in range(0, config['N_SLOT']*5, 5)]
-    plt.plot(t, day1_pred, label='ST-GAT-SingleEdge')
+    plt.plot(t, day1_pred, label='ST-GAT-EdgeType')
     plt.plot(t, day1_truth, label='truth')
     plt.xlabel('Time (minutes)')
     plt.ylabel('Speed prediction (mph)')
     plt.title('Predictions of traffic over one day at one sensor')
     plt.legend()
-    plt.savefig('../results/Graph1_SingleEdge/Graph1_SingleEdge_15.png')
+    plt.savefig('../results/Graph4_EdgeType/Graph4_EdgeType_15.png')
     plt.clf()
 
 # Evaluate model on test set
@@ -408,7 +430,7 @@ config['N_SLOT']= config['N_DAY_SLOT'] - (config['N_PRED']+config['N_HIST']) + 1
 
 # Create Dataset
 W1 = distance_to_W1(sensor_dist, sensor_conn)
-dataset = Graph1(config, W1)
+dataset = Graph4(config, W1)
 
 # Create train, val, test splits
 splits = (7, 3, 4) # 14 days in dataset -> train=7 val=3 test=4
@@ -447,13 +469,13 @@ def plot_prediction(test_dataloader, y_pred, y_truth, node, config):
     # Just grab the second day
     day1_pred = y_pred[config['N_SLOT']:2*config['N_SLOT']]
     t = [t for t in range(0, config['N_SLOT']*5, 5)]
-    plt.plot(t, day1_pred, label='ST-GAT-SingleEdge')
+    plt.plot(t, day1_pred, label='ST-GAT-EdgeType')
     plt.plot(t, day1_truth, label='truth')
     plt.xlabel('Time (minutes)')
     plt.ylabel('Speed prediction (mph)')
     plt.title('Predictions of traffic over one day at one sensor')
     plt.legend()
-    plt.savefig('../results/Graph1_SingleEdge/Graph1_SingleEdge_30.png')
+    plt.savefig('../results/Graph4_EdgeType/Graph4_EdgeType_30.png')
     plt.clf()
 
 # Evaluate model on test set
@@ -469,7 +491,7 @@ config['N_SLOT']= config['N_DAY_SLOT'] - (config['N_PRED']+config['N_HIST']) + 1
 
 # Create Dataset
 W1 = distance_to_W1(sensor_dist, sensor_conn)
-dataset = Graph1(config, W1)
+dataset = Graph4(config, W1)
 
 # Create train, val, test splits
 splits = (7, 3, 4) # 14 days in dataset -> train=7 val=3 test=4
@@ -508,13 +530,13 @@ def plot_prediction(test_dataloader, y_pred, y_truth, node, config):
     # Just grab the second day
     day1_pred = y_pred[config['N_SLOT']:2*config['N_SLOT']]
     t = [t for t in range(0, config['N_SLOT']*5, 5)]
-    plt.plot(t, day1_pred, label='ST-GAT-SingleEdge')
+    plt.plot(t, day1_pred, label='ST-GAT-EdgeType')
     plt.plot(t, day1_truth, label='truth')
     plt.xlabel('Time (minutes)')
     plt.ylabel('Speed prediction (mph)')
     plt.title('Predictions of traffic over one day at one sensor')
     plt.legend()
-    plt.savefig('../results/Graph1_SingleEdge/Graph1_SingleEdge_45.png')
+    plt.savefig('../results/Graph4_EdgeType/Graph4_EdgeType_45.png')
     plt.clf()
 
 # Evaluate model on test set
@@ -522,11 +544,11 @@ rmse45, mae45, mape45, y_pred, y_truth = eval(model, device, test_dataloader, 'T
 plot_prediction(test_dataloader, y_pred, y_truth, 0, config)
 
 print('-------------------------------------------------------------------------------')
-print('\nGraph 1 Single Edge (Baseline)')
-print('------------------------------')
-print('Node Features: Speeds from Past Hour')
+print('\nGraph 4 Edge Type')
+print('-----------------')
+print('Node Features: Speeds from Past Hour, Number of Lanes, Day of Week, Hour of Day')
 print('Edges Included: Type 1')
-print('Edge Types: Not Learned\n')
+print('Edge Types: Learned\n')
 print(f'Test Evals for 15 mins: RMSE: {rmse15}, MAE: {mae15}, MAPE: {mape15}')
 print(f'Test Evals for 30 mins: RMSE: {rmse30}, MAE: {mae30}, MAPE: {mape30}')
 print(f'Test Evals for 45 mins: RMSE: {rmse45}, MAE: {mae45}, MAPE: {mape45}')

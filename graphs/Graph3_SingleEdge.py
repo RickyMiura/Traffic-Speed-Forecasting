@@ -1,7 +1,7 @@
-#    Graph 1 Single Edge (Baseline)   #
+#         Graph 3 Single Edge         #
 # ------------------------------------#
 # Node Features: Speeds from Past Hour
-# Edges Included: Type 1
+# Edges Included: Type 1, Type 2, Type 3
 # Edge Types: Not Learned
 
 import torch
@@ -178,10 +178,83 @@ def distance_to_W1(dist_df, conn_df):
     
     return W1
 
-class Graph1(InMemoryDataset):
-    def __init__(self, config, W1, root='', transform=None, pre_transform=None):
+def distance_to_W2(dist_df, non_conn_df, dist_thresh, edge_num_thresh):
+    # Inverse transform distances
+    dist_array = dist_df.values
+    dist_array = np.where(dist_array == 0, np.nan, dist_array)
+    dist_array_inv = 1 / dist_array
+    dist_array_inv = pd.DataFrame(dist_array_inv).fillna(0).values
+    
+    non_conn_array = non_conn_df.values
+    W2 = dist_array_inv * non_conn_array
+    
+    dist_mask = W2 >= 1 / dist_thresh
+    W2 = W2 * dist_mask
+
+    edge_num_mask = []
+    for row in W2:
+        sorted_row = sorted(row)
+        while sorted_row[-edge_num_thresh] == 0:
+            edge_num_thresh -= 1
+            if edge_num_thresh == 0:
+                break
+
+        thresh = sorted_row[-edge_num_thresh]
+        edge_num_mask.append(row >= thresh)
+
+    edge_num_mask = np.array(edge_num_mask)
+    W2 = W2 * edge_num_mask
+    
+    W2_copy = W2.copy()
+    for row_ind, row in enumerate(W2):
+        for col_ind, val in enumerate(row):
+            if val != 0:
+                W2_copy[col_ind, row_ind] = val
+
+    return W2_copy
+
+def distance_to_W3(dist_df, conn_df, nth_jump, jump_dist_thresh, W1):
+    dist_array = dist_df.values
+    dist_array = np.where(dist_array == 0, np.nan, dist_array)
+    dist_array_inv = 1 / dist_array
+    dist_array_inv = pd.DataFrame(dist_array_inv).fillna(0).values
+
+    # Mask with directional connectivity
+    conn_array = conn_df.values
+    W3 = dist_array_inv * conn_array
+    W3 = W3 - W1
+
+    nth_jump = 3
+    jump_dist_thresh = 10
+    for row_ind, row in enumerate(W3):
+        row[:row_ind] = 0
+        row_no_zero = row[row!=0]
+
+        jump_weights = []
+        for i in range(nth_jump-2,len(row_no_zero), nth_jump): # 1, 3
+            jump_weights.append(row_no_zero[i])
+
+        within_dist = np.array(jump_weights) > 1/jump_dist_thresh
+        jump_weights = jump_weights * within_dist
+        jump_weights = jump_weights[jump_weights!=0]
+
+        for col_ind, val in enumerate(row):
+            if val not in jump_weights:
+                row[col_ind] = 0
+
+    W3_copy = W3.copy()
+    for row_ind, row in enumerate(W3):
+        for col_ind, val in enumerate(row):
+            if val != 0:
+                W3_copy[col_ind, row_ind] = val
+    
+    return W3_copy
+
+# Creating the graph
+class Graph3(InMemoryDataset):
+    def __init__(self, config, W1, W2, W3, root='', transform=None, pre_transform=None):
         self.config = config
-        self.W = W1
+        self.W = W1 + W2 + W3
         super().__init__(root, transform, pre_transform)
         self.process()
     
@@ -322,7 +395,7 @@ class ST_GAT_SingleEdge(torch.nn.Module):
         x = torch.reshape(x, (s[0]*self.n_nodes, self.n_pred))
     
         return x
-
+    
 config = {
     'BATCH_SIZE': 50,
     'EPOCHS': 1,
@@ -335,7 +408,11 @@ config = {
     'N_DAY_SLOT': 288,
     # number of days worth of data in the dataset
     'N_DAYS': 14,
-    'N_NODE': 71
+    'N_NODE': 71,
+    'W2_N_EDGE_THRESH': 3,
+    'W2_DIST_THRESH': 2,
+    'W3_NTH_JUMP': 3,
+    'W3_JUMP_DIST_THRESH': 5
 }
 
 ####### Predict the Next 15 Mins ######
@@ -347,12 +424,14 @@ config['N_SLOT']= config['N_DAY_SLOT'] - (config['N_PRED']+config['N_HIST']) + 1
 
 # Create Dataset
 W1 = distance_to_W1(sensor_dist, sensor_conn)
-dataset = Graph1(config, W1)
+W2 = distance_to_W2(sensor_dist, non_conn, config['W2_DIST_THRESH'], config['W2_N_EDGE_THRESH'])
+W3 = distance_to_W3(sensor_dist, non_conn, config['W3_NTH_JUMP'], config['W3_JUMP_DIST_THRESH'], W1)
+dataset = Graph3(config, W1, W2, W3)
 
 # Create train, val, test splits
 splits = (7, 3, 4) # 14 days in dataset -> train=7 val=3 test=4
 d_train, d_val, d_test = get_splits(dataset, config['N_SLOT'], splits)
-        
+
 train_dataloader = DataLoader(d_train, batch_size=config['BATCH_SIZE'], shuffle=True)
 val_dataloader = DataLoader(d_val, batch_size=config['BATCH_SIZE'], shuffle=True)
 test_dataloader = DataLoader(d_test, batch_size=config['BATCH_SIZE'], shuffle=False)
@@ -392,7 +471,7 @@ def plot_prediction(test_dataloader, y_pred, y_truth, node, config):
     plt.ylabel('Speed prediction (mph)')
     plt.title('Predictions of traffic over one day at one sensor')
     plt.legend()
-    plt.savefig('../results/Graph1_SingleEdge/Graph1_SingleEdge_15.png')
+    plt.savefig('../results/Graph3_SingleEdge/Graph3_SingleEdge_15.png')
     plt.clf()
 
 # Evaluate model on test set
@@ -408,7 +487,9 @@ config['N_SLOT']= config['N_DAY_SLOT'] - (config['N_PRED']+config['N_HIST']) + 1
 
 # Create Dataset
 W1 = distance_to_W1(sensor_dist, sensor_conn)
-dataset = Graph1(config, W1)
+W2 = distance_to_W2(sensor_dist, non_conn, config['W2_DIST_THRESH'], config['W2_N_EDGE_THRESH'])
+W3 = distance_to_W3(sensor_dist, non_conn, config['W3_NTH_JUMP'], config['W3_JUMP_DIST_THRESH'], W1)
+dataset = Graph3(config, W1, W2, W3)
 
 # Create train, val, test splits
 splits = (7, 3, 4) # 14 days in dataset -> train=7 val=3 test=4
@@ -453,7 +534,7 @@ def plot_prediction(test_dataloader, y_pred, y_truth, node, config):
     plt.ylabel('Speed prediction (mph)')
     plt.title('Predictions of traffic over one day at one sensor')
     plt.legend()
-    plt.savefig('../results/Graph1_SingleEdge/Graph1_SingleEdge_30.png')
+    plt.savefig('../results/Graph3_SingleEdge/Graph3_SingleEdge_30.png')
     plt.clf()
 
 # Evaluate model on test set
@@ -469,7 +550,9 @@ config['N_SLOT']= config['N_DAY_SLOT'] - (config['N_PRED']+config['N_HIST']) + 1
 
 # Create Dataset
 W1 = distance_to_W1(sensor_dist, sensor_conn)
-dataset = Graph1(config, W1)
+W2 = distance_to_W2(sensor_dist, non_conn, config['W2_DIST_THRESH'], config['W2_N_EDGE_THRESH'])
+W3 = distance_to_W3(sensor_dist, non_conn, config['W3_NTH_JUMP'], config['W3_JUMP_DIST_THRESH'], W1)
+dataset = Graph3(config, W1, W2, W3)
 
 # Create train, val, test splits
 splits = (7, 3, 4) # 14 days in dataset -> train=7 val=3 test=4
@@ -514,7 +597,7 @@ def plot_prediction(test_dataloader, y_pred, y_truth, node, config):
     plt.ylabel('Speed prediction (mph)')
     plt.title('Predictions of traffic over one day at one sensor')
     plt.legend()
-    plt.savefig('../results/Graph1_SingleEdge/Graph1_SingleEdge_45.png')
+    plt.savefig('../results/Graph3_SingleEdge/Graph3_SingleEdge_45.png')
     plt.clf()
 
 # Evaluate model on test set
@@ -522,10 +605,10 @@ rmse45, mae45, mape45, y_pred, y_truth = eval(model, device, test_dataloader, 'T
 plot_prediction(test_dataloader, y_pred, y_truth, 0, config)
 
 print('-------------------------------------------------------------------------------')
-print('\nGraph 1 Single Edge (Baseline)')
-print('------------------------------')
+print('\nGraph 3 Single Edge')
+print('-------------------')
 print('Node Features: Speeds from Past Hour')
-print('Edges Included: Type 1')
+print('Edges Included: Type 1, Type 2, Type 3')
 print('Edge Types: Not Learned\n')
 print(f'Test Evals for 15 mins: RMSE: {rmse15}, MAE: {mae15}, MAPE: {mape15}')
 print(f'Test Evals for 30 mins: RMSE: {rmse30}, MAE: {mae30}, MAPE: {mape30}')
