@@ -22,11 +22,19 @@ from torch_geometric.data import HeteroData
 
 ###### Load in datasets ######
 
-vds_info = pd.read_csv('../data/vds_info_w_lanes.csv').set_index('vds_id')
-sensor_speed = pd.read_csv('../data/sensor_speed.csv').set_index('vds_id')
-sensor_dist = pd.read_csv('../data/sensor_dist.csv').set_index('Unnamed: 0')
-sensor_conn = pd.read_csv('../data/sensor_conn.csv').set_index('Unnamed: 0')
-non_conn = pd.read_csv('../data/non_conn.csv').set_index('Unnamed: 0')
+current_script_directory = os.path.dirname(os.path.abspath(__file__))
+
+vds_info_path = os.path.join(current_script_directory, '..', 'data', 'vds_info_w_lanes.csv')
+sensor_speed_path = os.path.join(current_script_directory, '..', 'data', 'sensor_speed.csv')
+sensor_dist_path = os.path.join(current_script_directory, '..', 'data', 'sensor_dist.csv')
+sensor_conn_path = os.path.join(current_script_directory, '..', 'data', 'sensor_conn.csv')
+non_conn_path = os.path.join(current_script_directory, '..', 'data', 'non_conn.csv')
+
+vds_info = pd.read_csv(vds_info_path).set_index('vds_id')
+sensor_speed = pd.read_csv(sensor_speed_path).set_index('vds_id')
+sensor_dist = pd.read_csv(sensor_dist_path).set_index('Unnamed: 0')
+sensor_conn = pd.read_csv(sensor_conn_path).set_index('Unnamed: 0')
+non_conn = pd.read_csv(non_conn_path).set_index('Unnamed: 0')
 
 ###### Functions for Model Evaluation ######
 
@@ -377,7 +385,7 @@ def plot_prediction(test_dataloader, y_pred, y_truth, node, config):
     plt.ylabel('Speed prediction (mph)')
     plt.title('Predictions of traffic over one day at one sensor')
     plt.legend()
-    plt.savefig('../results/Graph1_EdgeType/Graph1_EdgeType_15.png')
+    plt.savefig(os.path.join(current_script_directory, '..','results', 'Graph1_EdgeType', 'Graph1_EdgeType_15.png'))
     plt.clf()
 
 # Evaluate model on test set
@@ -438,7 +446,7 @@ def plot_prediction(test_dataloader, y_pred, y_truth, node, config):
     plt.ylabel('Speed prediction (mph)')
     plt.title('Predictions of traffic over one day at one sensor')
     plt.legend()
-    plt.savefig('../results/Graph1_EdgeType/Graph1_EdgeType_30.png')
+    plt.savefig(os.path.join(current_script_directory, '..','results', 'Graph1_EdgeType', 'Graph1_EdgeType_30.png'))
     plt.clf()
 
 # Evaluate model on test set
@@ -499,7 +507,7 @@ def plot_prediction(test_dataloader, y_pred, y_truth, node, config):
     plt.ylabel('Speed prediction (mph)')
     plt.title('Predictions of traffic over one day at one sensor')
     plt.legend()
-    plt.savefig('../results/Graph1_EdgeType/Graph1_EdgeType_45.png')
+    plt.savefig(os.path.join(current_script_directory, '..','results', 'Graph1_EdgeType', 'Graph1_EdgeType_45.png'))
     plt.clf()
 
 # Evaluate model on test set
