@@ -417,7 +417,7 @@ config = {
     'N_DAY_SLOT': 288,
     # number of days worth of data in the dataset
     'N_DAYS': 14,
-    'N_NODE': 71,
+    'N_NODE': 308,
     'W2_N_EDGE_THRESH': 3,
     'W2_DIST_THRESH': 2
 }

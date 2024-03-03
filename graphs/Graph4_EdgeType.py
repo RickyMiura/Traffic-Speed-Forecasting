@@ -365,7 +365,7 @@ config = {
     'N_DAY_SLOT': 288,
     # number of days worth of data in the dataset
     'N_DAYS': 14,
-    'N_NODE': 71
+    'N_NODE': 308
 }
 
 ####### Predict the Next 15 Mins ######
