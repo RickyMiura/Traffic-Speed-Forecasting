@@ -6,6 +6,7 @@ from math import cos, asin, sqrt, pi
 vds_info = pd.read_csv('vds_info.csv')
 
 ######### Create dataframe for speeds and add lanes to sensor info #########
+print('Reading in sensor speeds...')
 speed_data = []
 lane_data = []
 for ind, row in vds_info.iterrows():
@@ -20,7 +21,7 @@ for ind, row in vds_info.iterrows():
     
     # Check that both datasets contain 1 weeks worth of 5 min intervals (1 day = 288 intervals * 7 days = 2016)
     if (len(w1_df) != 2016) or (len(w2_df) != 2016):
-        print(row['vds_id'] + ' does not contain all times')
+        print(str(row['vds_id']) + ' does not contain all times')
         continue
     
     # Create row representing all speeds for one sensor
@@ -72,8 +73,12 @@ for sen1 in sensor_list:
 ######### Create dataframe for nonconnectivity between sensors #########
 non_conn = (np.ones(sensor_conn.shape) - sensor_conn).astype(int)
 
+print('Creaing datasets...')
+
 sensor_speed.to_csv('sensor_speed.csv', index=True)
 vds_info.to_csv('vds_info_w_lanes.csv', index=True)
 sensor_dist.to_csv('sensor_dist.csv', index=True)
 sensor_conn.to_csv('sensor_conn.csv', index=True)
 non_conn.to_csv('non_conn.csv', index=True)
+
+print('Done!')
