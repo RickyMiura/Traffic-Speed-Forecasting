@@ -51,3 +51,12 @@ Traffic-Speed-Prediction/
 ├── requirements.txt
 └── run.py
 ```
+
+# Usage
+Below are the steps for replicating our project on your local machine. We recommend using a GPU for faster training of the models. 
+1. Clone this repository on your local machine
+2. Open your terminal
+3. Change (```cd```) into the directory to the cloned repository
+4. Type  ``` pip install -r requirements.txt```. This contains all the necessary packages for running the code.
+5. (Optional) Although the datasets are already prepared to be read in, you can see how we created the datasets. Change directory into the data folder. Then type ```python create_datasets.py``` in your terminal and your data will be readily available.
+6. Return to the home directory of the repository. Use run.py to execute the code. Type ```python run.py {specify graph to evaluate}``` in your terminal. Where it says {specify graph to evaluate}, replace this with one of the graphs (name must be exactly the same as it is in the table containing graph descriptions) and only the specified graph will be evaluated on. If no graph is specified and you just type ```python run.py```, all of the graphs will be evaluated on.
