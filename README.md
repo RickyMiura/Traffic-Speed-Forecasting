@@ -22,12 +22,32 @@ A description of each graph is provided below (more details in report). Feel fre
 The repository is organized as follow:
 ```
 Traffic-Speed-Prediction/
-├─ data
-  ├─ GATv2.py
-├─ GCN.py
-├─ GIN.py
-├─ README.md
-├─ graphGPS.py
-├─ requirements.txt
-├─ run.py
+├── data/
+│   ├── sensor_speeds/
+│   │   ├── SD_15/
+│   │   ├── SD_18/
+│   │   └── SD_I805/
+│   ├── create_datasets.py
+│   ├── non_conn.csv
+│   ├── sensor_conn.csv
+│   ├── sensor_dist.csv
+│   ├── sensor_speed.csv
+│   ├── vds_info.csv
+│   └── vds_info_w_lanes.csv
+├── graphs/
+│   ├── Graph1_EdgeType.py
+│   ├── Graph1_SingleEdge.py
+│   ├── Graph2_EdgeType.py
+│   ├── Graph2_SingleEdge.py
+│   ├── Graph3_EdgeType.py
+│   ├── Graph3_SingleEdge.py
+│   ├── Graph4_EdgeType.py
+│   ├── Graph4_SingleEdge.py
+│   ├── Graph5_EdgeType.py
+│   ├── Graph5_SingleEdge.py
+│   ├── Graph6_EdgeType.py
+│   └── Graph6_SingleEdge.py
+├── README.md
+├── requirements.txt
+└── run.py
 ```
