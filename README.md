@@ -60,3 +60,12 @@ Below are the steps for replicating our project on your local machine. We recomm
 4. Type  ``` pip install -r requirements.txt```. This contains all the necessary packages for running the code.
 5. (Optional) Although the datasets are already prepared to be read in, you can create the datasets yourself. To do so, ```cd``` into the data folder. Then type ```python create_datasets.py``` in your terminal. Your datasets are now ready.
 6. Return to the home directory of the repository. Use run.py to execute the code. Type ```python run.py {specify graph to evaluate}``` in your terminal. Where it says {specify graph to evaluate}, replace this with one of the graphs (name must be exactly the same as it is in the table containing graph descriptions) and only the specified graph will be evaluated on. If no graph is specified and you just type ```python run.py```, all of the graphs will be evaluated on.
+
+## Requirements
+1) Python 3
+2) Libraries listed in requirements.txt
+
+# Contributors
+1) Ricky Miura
+2) Gita Anand
+3) Sheena Patel
