@@ -15,8 +15,8 @@ A description of each graph is provided below (more details in report). Feel fre
 | ```Graph2_EdgeType``` | Speed | 1,2 | Learned | [Colab](https://colab.research.google.com/drive/1vrO3xDQljO8g71jWHr4XXLgiJidjemSs?usp=sharing) |
 | ```Graph3_EdgeType``` | Speed | 1,2,3 | Learned | [Colab](https://colab.research.google.com/drive/1Waemv1-oZY3bzFK_qOTaGjkSIEMVxivZ?usp=sharing) |
 | ```Graph4_EdgeType``` | Speed, Lanes, Day of Week, Hour of Day | 1 | Learned | [Colab](https://colab.research.google.com/drive/1WLRpkIO02nM4jTMqgvuzROAD6lh8Rftd?usp=sharing) |
-| ```Graph5_EdgeType``` | Speed, Lanes, Day of Week, Hour of Day | 1,2 | Learned | [Colab](https://colab.research.google.com/drive/10bfLNOjDnF-FO15Q44KmeSHtezl6HAK1?usp=sharing) |
-| ```Graph6_EdgeType``` | Speed, Lanes, Day of Week, Hour of Day | 1,2,3 | Learned | [Colab](https://colab.research.google.com/drive/1J7NE5TULHKIYu_wSzyyL0olOkTsAxc4k?usp=sharing) |
+| ```Graph5_EdgeType``` | Speed, Lanes, Day of Week, Hour of Day | 1,2 | Learned | [Colab](https://colab.research.google.com/drive/1IjPj5u85C8WgpK7wU38miUu0uof_-yxr?usp=sharing) |
+| ```Graph6_EdgeType``` | Speed, Lanes, Day of Week, Hour of Day | 1,2,3 | Learned | [Colab](https://colab.research.google.com/drive/10diC8lZd3s_V-nJ5rccwY-q3fEV3rb2u?usp=sharing) |
 
 # Project Structure
 The repository is organized as follow:
