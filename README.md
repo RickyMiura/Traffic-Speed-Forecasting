@@ -52,7 +52,8 @@ Traffic-Speed-Prediction/
 ├── results/
 ├── README.md
 ├── requirements.txt
-└── run.py
+├── run.py
+└── showcase_poster.pdf
 ```
 
 # Usage
