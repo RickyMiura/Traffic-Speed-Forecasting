@@ -29,8 +29,10 @@ Traffic-Speed-Prediction/
 │   │   └── SD_I805/
 │   ├── create_datasets.py
 │   ├── non_conn.csv
+│   ├── sd.geojson
 │   ├── sensor_conn.csv
 │   ├── sensor_dist.csv
+│   ├── sensor_maps.ipynb
 │   ├── sensor_speed.csv
 │   ├── vds_info.csv
 │   └── vds_info_w_lanes.csv
