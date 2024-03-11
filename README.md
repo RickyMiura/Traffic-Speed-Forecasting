@@ -73,3 +73,5 @@ Below are the steps for replicating our project on your local machine. We recomm
 1) Ricky Miura
 2) Gita Anand
 3) Sheena Patel
+4) Mentor: Gal Mishne
+5) Mentor: Yusu Wang
