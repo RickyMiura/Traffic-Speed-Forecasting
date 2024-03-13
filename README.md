@@ -51,9 +51,10 @@ Traffic-Speed-Prediction/
 │   └── Graph6_SingleEdge.py
 ├── results/
 ├── README.md
+├── poster.pdf
+├── report.pdf
 ├── requirements.txt
-├── run.py
-└── showcase_poster.pdf
+└── run.py
 ```
 
 # Usage
