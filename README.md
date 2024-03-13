@@ -74,5 +74,6 @@ Below are the steps for replicating our project on your local machine. We recomm
 1) Ricky Miura
 2) Gita Anand
 3) Sheena Patel
-4) Mentor: Gal Mishne
-5) Mentor: Yusu Wang
+
+# Acknowledgments
+We sincerely thank Gal Mishne and Yusu Wang for their mentorship and the Halıcıoğlu Data Science Institute for its support, making this project possible through their guidance and encouragement. Their collective expertise and unwavering support have been instrumental in our success, fostering a rich environment for learning and innovation.
