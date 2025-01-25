@@ -50,6 +50,7 @@ Traffic-Speed-Prediction/
 │   ├── Graph6_EdgeType.py
 │   └── Graph6_SingleEdge.py
 ├── results/
+├── .gitignore
 ├── README.md
 ├── poster.pdf
 ├── report.pdf
