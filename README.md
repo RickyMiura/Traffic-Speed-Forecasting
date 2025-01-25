@@ -2,6 +2,8 @@
 This project highlights the work of our Senior Capstone Project for the Data Science major at UC San Diego. Under the mentorship of esteemed researchers Yusu Wang and Gal Mishne from the Halicioglu Data Science Institute at UC San Diego, our project delves into the intricate world of graph representations within highway networks, exploring new techniques for traffic speed prediction. Through the process of constructing diverse graphs, integrating a variety of node features and edge types, we aim to explore new ways to represent the dynamics of highway traffic networks. We then utilize two Spatial-Temporal Graph Attention Network (ST-GAT) variants, ST-GAT Single Edge and ST-GAT Edge Type, to predict traffic speeds over the next 15, 30, and 45 minutes from a given time period.
 
 A description of each graph is provided below (more details in report). Feel free to take a look at our experiments and results using the Google Colab link provided for each respective graph!
+
+[Project Website](https://sheenapatel262.github.io/dsc180b_B12_1_website.github.io/)
 ## Graph Descriptions and Results
 | Graph  | Node Features | Edge Types Included | Edge Types Learned | Evaluations |
 |---|---|---|---|---|
