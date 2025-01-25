@@ -32,7 +32,7 @@ Traffic-Speed-Prediction/
 │   ├── sd.geojson
 │   ├── sensor_conn.csv
 │   ├── sensor_dist.csv
-│   ├── sensor_maps.ipynb
+│   ├── sensor_maps.pdf
 │   ├── sensor_speed.csv
 │   ├── vds_info.csv
 │   └── vds_info_w_lanes.csv
