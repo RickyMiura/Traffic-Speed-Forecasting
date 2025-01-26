@@ -3,7 +3,7 @@ This project highlights the work of our Senior Capstone Project for the Data Sci
 
 A description of each graph is provided below (more details in report). Feel free to take a look at our experiments and results using the Google Colab link provided for each respective graph!
 
-[Project Website](https://sheenapatel262.github.io/dsc180b_B12_1_website.github.io/)
+Check out our website [here](https://sheenapatel262.github.io/dsc180b_B12_1_website.github.io/)!
 ## Graph Descriptions and Results
 | Graph  | Node Features | Edge Types Included | Edge Types Learned | Evaluations |
 |---|---|---|---|---|
